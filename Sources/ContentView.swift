@@ -5,6 +5,12 @@ struct ContentView: View {
     @StateObject private var manager = CalendarManager()
     @State private var tab: Int = 0
 
+    // 統計タブの状態はタブ破棄後も保持したいので親で管理
+    @State private var statsYear = Calendar.current.component(.year, from: Date())
+    @State private var statsRangeStart = 1
+    @State private var statsRangeEnd = 12
+    @State private var monthlyStats: [MonthlyStat] = []
+
     var body: some View {
         // 注: TabViewはStatefulTabContainerの無限再挿入バグ
         // （タブ切替時にフリーズ）を引き起こすため自作タブバーで代用
@@ -15,7 +21,13 @@ struct ContentView: View {
             case 0:
                 PayrollView(manager: manager, tab: $tab)
             case 1:
-                StatsView(manager: manager)
+                StatsView(
+                    manager: manager,
+                    statsYear: $statsYear,
+                    rangeStart: $statsRangeStart,
+                    rangeEnd: $statsRangeEnd,
+                    monthlyStats: $monthlyStats
+                )
             default:
                 SettingsView(manager: manager)
             }

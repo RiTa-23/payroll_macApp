@@ -5,13 +5,14 @@ import Charts
 
 struct StatsView: View {
     @ObservedObject var manager: CalendarManager
-    @State private var statsYear = Calendar.current.component(.year, from: Date())
-    @State private var monthlyStats: [MonthlyStat] = []
+    // 親（ContentView）で保持する状態 = タブ切替後も値が残る
+    @Binding var statsYear: Int
+    @Binding var rangeStart: Int
+    @Binding var rangeEnd: Int
+    @Binding var monthlyStats: [MonthlyStat]
+    // 一時的な表示状態はタブローカル
     @State private var loading = false
-    @State private var reloadKey = 0
-    // 期間指定（月平均・週勤務の算出対象）
-    @State private var rangeStart = 1
-    @State private var rangeEnd = 12
+    @State private var loadTask: Task<Void, Never>?
 
     var body: some View {
         Group {
@@ -32,15 +33,16 @@ struct StatsView: View {
         }
         .onAppear { scheduleLoad() }
         .onChange(of: statsYear) { scheduleLoad() }
-        .onChange(of: reloadKey) { scheduleLoad() }
     }
 
-    /// タブ再挿入トランザクション中の状態書き換えは
-    /// StatefulTabContainerの無限再挿入バグを引き起こすため、
-    /// runloop一周後（トランザクション完了後）にロードする
+    /// タブ再挿入トランザクション直後の状態書き換えを避けつつ、
+    /// 連続呼び出しは直前のロードをキャンセルしてデバウンスする
     private func scheduleLoad() {
-        DispatchQueue.main.async { [statsYear] in
-            Task { await load(year: statsYear) }
+        loadTask?.cancel()
+        loadTask = Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 250_000_000)
+            guard !Task.isCancelled else { return }
+            await load(year: statsYear)
         }
     }
 
@@ -62,10 +64,11 @@ struct StatsView: View {
                     .opacity(loading ? 1 : 0)
 
                 Button {
-                    reloadKey += 1
+                    scheduleLoad()
                 } label: {
                     Image(systemName: "arrow.clockwise")
                 }
+                .disabled(loading)
                 .help("再読み込み")
             }
             .padding(.horizontal, 12)
@@ -269,13 +272,12 @@ struct StatsView: View {
     }
 
     private func load(year: Int) async {
-        let shouldToggleOn = !loading
-        if shouldToggleOn { loading = true }
+        loading = true
         let result = await manager.loadYearlyStats(year: year)
         // 値が実際に変わったときだけ状態を書き換える（再描画の連鎖を防ぐ）
         if result != monthlyStats {
             monthlyStats = result
         }
-        if shouldToggleOn { loading = false }
+        loading = false
     }
 }
