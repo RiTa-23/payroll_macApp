@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>給与計算 PayrollCalculator — カレンダーからバイトの給与を自動計算</title>
+<meta name="description" content="Macのカレンダーアプリに入れたシフトから、バイトの給与を自動計算する無料のMacアプリ。時給・休憩・交通費・時間帯別時給に対応。">
+<link rel="icon" href="assets/icon.png">
+<style>
+  :root {
+    --pink: #ff3b6e;
+    --pink-dark: #e62e5f;
+    --ink: #1d1d1f;
+    --ink-2: #6e6e73;
+    --ink-3: #8e8e93;
+    --line: #e5e5ea;
+    --bg: #ffffff;
+    --bg-soft: #f5f5f7;
+    --radius: 12px;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Hiragino Kaku Gothic ProN", "Hiragino Sans", "Noto Sans JP", sans-serif;
+    color: var(--ink);
+    background: var(--bg);
+    line-height: 1.65;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 880px; margin: 0 auto; padding: 0 24px; }
+
+  /* ---------- ナビ ---------- */
+  header {
+    position: sticky; top: 0; z-index: 10;
+    background: rgba(255,255,255,.85);
+    backdrop-filter: saturate(180%) blur(16px);
+    -webkit-backdrop-filter: saturate(180%) blur(16px);
+    border-bottom: 1px solid var(--line);
+  }
+  .nav { display: flex; align-items: center; gap: 10px; height: 52px; }
+  .nav img { width: 26px; height: 26px; border-radius: 7px; }
+  .nav .name { font-weight: 600; font-size: 15px; }
+  .nav .links { margin-left: auto; display: flex; gap: 20px; font-size: 13.5px; }
+  .nav .links a { color: var(--ink-2); text-decoration: none; }
+  .nav .links a:hover { color: var(--ink); }
+  .nav .links a.dl { color: var(--pink); font-weight: 600; }
+
+  /* ---------- ヒーロー ---------- */
+  .hero { text-align: center; padding: 72px 0 56px; }
+  .hero .icon {
+    width: 128px; height: 128px; border-radius: 28px;
+    box-shadow: 0 6px 24px rgba(255,59,110,.18);
+  }
+  .hero h1 { font-size: 42px; font-weight: 700; letter-spacing: -.02em; margin-top: 24px; }
+  .hero .tag { font-size: 18px; color: var(--ink-2); margin-top: 12px; }
+  .btn-row { margin-top: 28px; display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+  .btn {
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 12px 26px; border-radius: 980px;
+    font-size: 16px; font-weight: 600; text-decoration: none;
+    transition: background .15s;
+  }
+  .btn-primary { background: var(--pink); color: #fff; }
+  .btn-primary:hover { background: var(--pink-dark); }
+  .btn-plain { background: var(--bg-soft); color: var(--ink); }
+  .btn-plain:hover { background: #ececf0; }
+  .hero .note { margin-top: 16px; font-size: 13px; color: var(--ink-3); }
+
+  /* ---------- セクション共通 ---------- */
+  section { padding: 56px 0; }
+  section + section { border-top: 1px solid var(--line); }
+  h2 { font-size: 28px; font-weight: 700; letter-spacing: -.01em; }
+  .lead { color: var(--ink-2); margin-top: 10px; font-size: 16px; }
+
+  /* ---------- 機能 ---------- */
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 28px; }
+  .card {
+    background: var(--bg-soft);
+    border-radius: var(--radius);
+    padding: 22px;
+    transition: transform .15s;
+  }
+  .card:hover { transform: translateY(-2px); }
+  .card .ic {
+    width: 40px; height: 40px; border-radius: 10px;
+    display: flex; align-items: center; justify-content: center;
+    margin-bottom: 14px;
+  }
+  .card .ic svg { width: 22px; height: 22px; }
+  .card h3 { font-size: 17px; font-weight: 600; }
+  .card p { font-size: 14.5px; color: var(--ink-2); margin-top: 6px; }
+  .c-pink   { background: #ffe4ea; color: var(--pink); }
+  .c-orange { background: #ffeadb; color: #e07820; }
+  .c-blue   { background: #e0efff; color: #1c76d6; }
+  .c-indigo { background: #e6e6ff; color: #5b5bd6; }
+  .c-green  { background: #ddf5e3; color: #2a9d54; }
+  .c-gray   { background: #ebebef; color: #636366; }
+
+  /* ---------- スクリーンショット ---------- */
+  .shots { margin-top: 36px; display: grid; gap: 28px; justify-items: center; }
+  .shot img {
+    width: 100%; border-radius: 10px;
+    border: 1px solid var(--line);
+    box-shadow: 0 12px 40px rgba(0,0,0,.10);
+  }
+  .shot figcaption { text-align: center; font-size: 13px; color: var(--ink-3); margin-top: 10px; }
+
+  /* ---------- インストール ---------- */
+  .steps { margin-top: 26px; display: grid; gap: 14px; }
+  .step { display: flex; gap: 14px; align-items: flex-start; }
+  .num {
+    flex: none; width: 26px; height: 26px; border-radius: 50%;
+    background: var(--pink); color: #fff; font-size: 14px; font-weight: 700;
+    display: flex; align-items: center; justify-content: center; margin-top: 2px;
+  }
+  .step div p { font-size: 15.5px; }
+  .step div p small { color: var(--ink-2); font-size: 13.5px; }
+  .warn {
+    background: #fff8e6; border: 1px solid #f3e2b3; border-radius: var(--radius);
+    padding: 16px 18px; margin-top: 26px; font-size: 14px;
+  }
+  .warn strong { color: #9a6b00; }
+  .warn ol { margin: 8px 0 0 20px; }
+  .warn ol li { margin-top: 4px; color: #57492a; }
+
+  /* ---------- 要件 / フッター ---------- */
+  .req { background: var(--bg-soft); border-radius: var(--radius); padding: 20px 22px; margin-top: 26px; font-size: 14.5px; }
+  .req dt { font-weight: 600; float: left; clear: left; width: 120px; }
+  .req dd { margin-left: 132px; color: var(--ink-2); }
+  footer {
+    border-top: 1px solid var(--line); margin-top: 0;
+    padding: 28px 0 40px; text-align: center;
+    font-size: 13px; color: var(--ink-3);
+  }
+  footer a { color: var(--ink-2); text-decoration: none; }
+  footer a:hover { text-decoration: underline; }
+
+  @media (max-width: 640px) {
+    .hero h1 { font-size: 32px; }
+    .grid { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="wrap nav">
+    <img src="assets/icon.png" alt="給与計算アイコン">
+    <span class="name">給与計算</span>
+    <nav class="links">
+      <a href="#features">機能</a>
+      <a href="#install">インストール</a>
+      <a href="https://github.com/RiTa-23/payroll_macApp">GitHub</a>
+      <a class="dl" href="https://github.com/RiTa-23/payroll_macApp/releases">ダウンロード</a>
+    </nav>
+  </div>
+</header>
+
+<main>
+
+<!-- ===== ヒーロー ===== -->
+<section class="hero">
+  <div class="wrap">
+    <img class="icon" src="assets/icon.png" alt="PayrollCalculator アイコン">
+    <h1>給与計算</h1>
+    <p class="tag">カレンダーのシフトから、バイトの給与を自動計算。</p>
+    <div class="btn-row">
+      <a class="btn btn-primary" href="https://github.com/RiTa-23/payroll_macApp/releases">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        Mac版をダウンロード
+      </a>
+      <a class="btn btn-plain" href="https://github.com/RiTa-23/payroll_macApp">GitHubで見る</a>
+    </div>
+    <p class="note">無料 · macOS 14 Sonoma 以降 · Apple Silicon</p>
+  </div>
+</section>
+
+<!-- ===== スクリーンショット ===== -->
+<section style="border-top:none;padding-top:0;">
+  <div class="wrap">
+    <div class="shots">
+      <figure class="shot" style="max-width:620px;">
+        <img src="assets/screenshot_main.png" alt="給与計算タブ — 月次のシフト一覧と合計支給額">
+        <figcaption>給与計算 — カレンダーのシフトを自動集計</figcaption>
+      </figure>
+      <figure class="shot" style="max-width:620px;">
+        <img src="assets/screenshot_stats.png" alt="統計タブ — 月別給与グラフと年間合計">
+        <figcaption>統計 — 月別グラフ・年間合計・期間指定の平均</figcaption>
+      </figure>
+      <figure class="shot" style="max-width:620px;">
+        <img src="assets/screenshot_setting.png" alt="設定タブ — バイトごとの給与条件">
+        <figcaption>設定 — バイトごとの時給・休憩・交通費・時間帯別時給</figcaption>
+      </figure>
+    </div>
+    <p style="text-align:center;font-size:12.5px;color:var(--ink-3);margin-top:20px;">カレンダーにシフトを入れるだけ。あとはアプリが自動で集計します。</p>
+  </div>
+</section>
+
+<!-- ===== 機能 ===== -->
+<section id="features">
+  <div class="wrap">
+    <h2>機能</h2>
+    <p class="lead">給与計算に必要なものだけを、シンプルに。</p>
+    <div class="grid">
+
+      <div class="card">
+        <div class="ic c-pink"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="4" width="18" height="17" rx="3"/><line x1="8" y1="2.5" x2="8" y2="6"/><line x1="16" y1="2.5" x2="16" y2="6"/><line x1="3" y1="9" x2="21" y2="9"/></svg></div>
+        <h3>カレンダー連動</h3>
+        <p>Mac標準のカレンダーアプリに入っているシフトを自動で読み込みます。手入力は不要です。</p>
+      </div>
+
+      <div class="card">
+        <div class="ic c-orange"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 12h4l2-8 4 16 2-8h4"/></svg></div>
+        <h3>バイトごとの条件設定</h3>
+        <p>掛け持ちOK。バイトのカレンダーごとに時給・休憩時間・交通費を個別に設定できます。</p>
+      </div>
+
+      <div class="card">
+        <div class="ic c-indigo"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15.5 14"/></svg></div>
+        <h3>時間帯別の時給</h3>
+        <p>深夜22:00〜翌5:00は1,375円、のような時間帯ごとの時給を複数登録可能。日跨ぎシフトにも対応します。</p>
+      </div>
+
+      <div class="card">
+        <div class="ic c-blue"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="5" y1="21" x2="5" y2="13"/><line x1="12" y1="21" x2="12" y2="8"/><line x1="19" y1="21" x2="19" y2="4"/></svg></div>
+        <h3>給与の統計</h3>
+        <p>月別給与グラフ、年間合計、期間指定の月平均給与や週あたりの勤務日数をひと目で確認できます。</p>
+      </div>
+
+      <div class="card">
+        <div class="ic c-green"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H7a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7z"/><polyline points="14 2 14 7 19 7"/><line x1="9" y1="13" x2="15" y2="13"/><line x1="9" y1="17" x2="15" y2="17"/></svg></div>
+        <h3>CSV書き出し</h3>
+        <p>月次の給与明細をワンクリックでCSV出力。Excelやスプレッドシートでそのまま開けます。</p>
+      </div>
+
+      <div class="card">
+        <div class="ic c-gray"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="4" y="10" width="16" height="11" rx="2.5"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg></div>
+        <h3>データは手元に</h3>
+        <p>計算はすべてMac上で完結。シフト情報が外部に送信されることはありません。</p>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<!-- ===== インストール ===== -->
+<section id="install">
+  <div class="wrap">
+    <h2>インストール</h2>
+    <div class="steps">
+
+      <div class="step">
+        <span class="num">1</span>
+        <div><p><a href="https://github.com/RiTa-23/payroll_macApp/releases" style="color:var(--pink)">Releasesページ</a>から最新版の <b>DMG</b> をダウンロードして開きます。</p></div>
+      </div>
+
+      <div class="step">
+        <span class="num">2</span>
+        <div><p>表示されたウィンドウで <b>PayrollCalculator.app</b> を <b>Applications</b> フォルダにドラッグします。</p></div>
+      </div>
+
+      <div class="step">
+        <span class="num">3</span>
+        <div>
+          <p>初回起動時はセキュリティ警告が表示されます（下記参照）。許可すると以降は普通に起動できます。</p>
+          <p><small>アプリ起動後、カレンダーへのアクセスを求められたら「許可」を選んでください。</small></p>
+        </div>
+      </div>
+
+    </div>
+
+    <div class="warn">
+      <strong>「開いていません」と表示された場合</strong>
+      <p style="font-size:13.5px;color:#57492a;margin-top:2px">無料で配布しているためAppleの公証は受けていませんが、以下の手順で最初の1回だけ許可できます。</p>
+      <ol>
+        <li>警告ポップアップ右上の <b>？</b> をクリックし、Macユーザガイドを開く</li>
+        <li>ポップアップの <b>「完了」</b> を押して閉じる</li>
+        <li><b>システム設定の「プライバシーとセキュリティ」</b>を開く</li>
+        <li>「セキュリティ」項目に表示された <b>「このまま開く」</b> をクリック</li>
+      </ol>
+    </div>
+
+    <dl class="req">
+      <dt>動作環境</dt><dd>macOS 14 Sonoma 以降 / Apple Silicon（M1以降）</dd>
+      <dt>価格</dt><dd>無料（オープンソース）</dd>
+      <dt>ソースコード</dt><dd><a href="https://github.com/RiTa-23/payroll_macApp" style="color:var(--pink)">GitHub</a> で公開しています</dd>
+    </dl>
+  </div>
+</section>
+
+</main>
+
+<footer>
+  <div class="wrap">
+    <p>給与計算 PayrollCalculator — <a href="https://github.com/RiTa-23/payroll_macApp">GitHub</a> · <a href="https://github.com/RiTa-23/payroll_macApp/releases">Releases</a></p>
+  </div>
+</footer>
+
+</body>
+</html>
