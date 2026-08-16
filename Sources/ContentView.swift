@@ -256,7 +256,7 @@ struct SettingsView: View {
                 if enabledCalendars.isEmpty {
                     HStack(spacing: 8) {
                         Image(systemName: "info.circle")
-                        Text("カレンダリーを選択すると、そのバイトごとの給与条件を設定できます")
+                        Text("カレンダーを選択すると、そのバイトごとの給与条件を設定できます")
                     }
                     .foregroundStyle(.secondary)
                     .padding(.vertical, 8)
@@ -280,6 +280,15 @@ struct SettingsView: View {
             .sorted { $0.title < $1.title }
     }
 
+    /// カレンダー一覧を5項目ごとに列分割したチャンク
+    private var calendarColumns: [[EKCalendar]] {
+        let perColumn = 5
+        let calendars = manager.allCalendars
+        return stride(from: 0, to: calendars.count, by: perColumn).map {
+            Array(calendars[$0..<min($0 + perColumn, calendars.count)])
+        }
+    }
+
     private var calendarSection: some View {
         GroupBox {
             VStack(alignment: .leading, spacing: 6) {
@@ -290,11 +299,17 @@ struct SettingsView: View {
                         .foregroundStyle(.secondary)
                         .padding(.vertical, 8)
                 } else {
-                    ForEach(manager.allCalendars, id: \.calendarIdentifier) { cal in
-                        Toggle(isOn: calendarBinding(cal.calendarIdentifier)) {
-                            HStack(spacing: 8) {
-                                Circle().fill(Color(cal.color)).frame(width: 10, height: 10)
-                                Text(cal.title)
+                    HStack(alignment: .top, spacing: 24) {
+                        ForEach(calendarColumns.indices, id: \.self) { col in
+                            VStack(alignment: .leading, spacing: 6) {
+                                ForEach(calendarColumns[col], id: \.calendarIdentifier) { cal in
+                                    Toggle(isOn: calendarBinding(cal.calendarIdentifier)) {
+                                        HStack(spacing: 8) {
+                                            Circle().fill(Color(cal.color)).frame(width: 10, height: 10)
+                                            Text(cal.title)
+                                        }
+                                    }
+                                }
                             }
                         }
                     }
@@ -303,7 +318,7 @@ struct SettingsView: View {
             .padding(4)
         } label: {
             Label("バイトのカレンダー（複数選択可）", systemImage: "calendar.badge.checkmark")
-            .font(.headline)
+                .font(.headline)
         }
     }
 
