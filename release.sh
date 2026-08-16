@@ -8,9 +8,11 @@
 # 処理内容:
 #   1. Info.plistのバージョン同期
 #   2. クリーンビルド（build.sh）
-#   3. リリース用zip作成（dittoで.appを正しくアーカイブ）
+#   3. リリース用DMG作成（create-dmg: Applicationsドロップリンク付き）
 #   4. タグ作成 & push
-#   5. GitHub Release作成（zip添付・リリースノート自動生成）
+#   5. GitHub Release作成（DMG添付・リリースノート自動生成）
+#
+# 要件: brew install create-dmg gh
 set -euo pipefail
 cd "$(dirname "$0")"
 
@@ -25,13 +27,17 @@ else
   VERSION="$(current_in_plist)"
 fi
 TAG="v${VERSION}"
-ZIP_PATH="build/${APP_NAME}-${VERSION}.zip"
+DMG_PATH="build/${APP_NAME}-${VERSION}.dmg"
 
 echo "🔖 リリースバージョン: ${VERSION}（タグ: ${TAG}）"
 
 # ---- 前提チェック ----
 if ! command -v gh >/dev/null; then
   echo "❌ gh CLIがインストールされていません: brew install gh && gh auth login" >&2
+  exit 1
+fi
+if ! command -v create-dmg >/dev/null; then
+  echo "❌ create-dmgがインストールされていません: brew install create-dmg" >&2
   exit 1
 fi
 if git rev-parse "$TAG" >/dev/null 2>&1; then
@@ -57,11 +63,37 @@ fi
 echo "🛠  ビルド..."
 ./build.sh
 
-# ---- 3. zip作成（dittoはsymlink・権限・拡張属性を正しく保持する） ----
-echo "📦 リリース用zip作成: ${ZIP_PATH}"
-rm -f "$ZIP_PATH"
-ditto -c -k --keepParent "build/${APP_NAME}.app" "$ZIP_PATH"
-SHA256=$(shasum -a 256 "$ZIP_PATH" | awk '{print $1}')
+# ---- 3. DMG作成（Applicationsへのドロップリンク付き） ----
+echo "💿 リリース用DMG作成: ${DMG_PATH}"
+rm -f "$DMG_PATH"
+# .appのみをDMGに入れるためステージングディレクトリに隔離
+STAGING="build/dmg_staging"
+rm -rf "$STAGING"
+mkdir -p "$STAGING"
+cp -R "build/${APP_NAME}.app" "$STAGING/"
+# create-dmgは初回マウントに失敗することがあるため3回までリトライ
+for attempt in 1 2 3; do
+  if create-dmg \
+      --volname "${APP_NAME}" \
+      --window-pos 200 120 \
+      --window-size 560 360 \
+      --icon-size 110 \
+      --text-size 12 \
+      --icon "${APP_NAME}.app" 150 190 \
+      --app-drop-link 410 190 \
+      --hide-extension "${APP_NAME}.app" \
+      "$DMG_PATH" \
+      "$STAGING/"; then
+    break
+  fi
+  echo "   ⚠️  create-dmg 試行 ${attempt} 失敗、リトライ..."
+  rm -f "$DMG_PATH"
+  if [ "$attempt" -eq 3 ]; then
+    echo "❌ DMG作成に失敗しました" >&2
+    exit 1
+  fi
+done
+SHA256=$(shasum -a 256 "$DMG_PATH" | awk '{print $1}')
 echo "   SHA-256: ${SHA256}"
 
 # ---- 4. タグ作成 & push ----
@@ -74,8 +106,8 @@ echo "🚀 GitHub Releaseを作成..."
 NOTES=$(cat <<EOF
 ## インストール
 
-1. 下の **${APP_NAME}-${VERSION}.zip** をダウンロードして展開
-2. \`PayrollCalculator.app\` を **アプリケーション** フォルダに移動
+1. 下の **${APP_NAME}-${VERSION}.dmg** をダウンロードして開く
+2. 表示されたウィンドウで \`PayrollCalculator.app\` を **Applications** フォルダにドラッグ
 3. 初回起動は **右クリック → 「開く」→「開く」** を選択
    （未公証アプリのため、通常のダブルクリックでは警告が出ます）
 4. カレンダーへのアクセスを求められたら「許可」
@@ -91,7 +123,7 @@ ${SHA256}
 \`\`\`
 EOF
 )
-gh release create "$TAG" "$ZIP_PATH" \
+gh release create "$TAG" "$DMG_PATH" \
   --title "${APP_NAME} ${VERSION}" \
   --notes "$NOTES" \
   --generate-notes

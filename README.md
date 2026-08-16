@@ -4,10 +4,10 @@ macOS標準のカレンダーアプリと連携し、バイトのシフトから
 
 ## インストール
 
-**ダウンロード（推奨）**: [Releasesページ](https://github.com/RiTa-23/payroll_macApp/releases)から最新版のzipをダウンロード
+**ダウンロード（推奨）**: [Releasesページ](https://github.com/RiTa-23/payroll_macApp/releases)から最新版のDMGをダウンロード
 
-1. `PayrollCalculator-x.y.z.zip` を展開
-2. `PayrollCalculator.app` を **アプリケーション** フォルダに移動
+1. `PayrollCalculator-x.y.z.dmg` を開く
+2. 表示されたウィンドウで `PayrollCalculator.app` を **Applications** フォルダにドラッグ
 3. 初回起動は **右クリック →「開く」→「開く」** を選択
    > 未公証アプリのため、ダブルクリックでは「開けません」警告が出ます。上記の手順で最初の1回だけ許可してください
 4. カレンダーへのアクセスを求められたら「許可」
@@ -69,7 +69,7 @@ payroll/
 ./release.sh 1.1.0      # バージョンを指定してリリース
 ```
 
-ビルド → zip作成 → タグ作成 → push → GitHub Release作成まで自動で行います（`gh` CLIと認証が必要）。
+ビルド → DMG作成（Applicationsドロップリンク付き）→ タグ作成 → push → GitHub Release作成まで自動で行います（`gh` と `create-dmg` が必要: `brew install gh create-dmg`）。
 
 ## 要件
 
