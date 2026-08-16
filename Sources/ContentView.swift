@@ -122,8 +122,8 @@ struct PayrollView: View {
             stat("出勤日数", "\(manager.summary.workDays)日")
             stat("総実働時間", manager.summary.workedMinutes.hoursAndMinutesText)
             stat("基本給", moneyText(manager.summary.basePay))
-            if manager.summary.nightPremium > 0 {
-                stat("深夜割増", moneyText(manager.summary.nightPremium))
+            if manager.summary.nightPay > 0 {
+                stat("時間帯別給与", moneyText(manager.summary.nightPay))
             }
             stat("交通費", moneyText(manager.summary.transport))
             Divider().frame(height: 36)
@@ -214,8 +214,8 @@ struct ShiftRowView: View {
 
             VStack(alignment: .trailing, spacing: 1) {
                 Text(moneyText(row.totalPay)).bold().monospacedDigit()
-                if row.nightPremium > 0 {
-                    Text("割増 +\(moneyText(row.nightPremium))")
+                if row.nightPay > 0 {
+                    Text("内 時間帯別 \(moneyText(row.nightPay))")
                         .font(.caption)
                         .foregroundStyle(.indigo)
                 }
@@ -303,8 +303,85 @@ struct SettingsView: View {
             .padding(4)
         } label: {
             Label("バイトのカレンダー（複数選択可）", systemImage: "calendar.badge.checkmark")
-                .font(.headline)
+            .font(.headline)
         }
+    }
+
+    // MARK: 時間帯別時給エディタ
+
+    private func bandEditor(job: Binding<JobSetting>) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 10) {
+                Text("開始").font(.caption).foregroundStyle(.secondary).frame(width: 84, alignment: .leading)
+                Text("終了").font(.caption).foregroundStyle(.secondary).frame(width: 84, alignment: .leading)
+                Text("この時間帯の時給").font(.caption).foregroundStyle(.secondary)
+            }
+            ForEach(job.wageBands) { $band in
+                HStack(spacing: 10) {
+                    DatePicker("", selection: startTimeBinding($band), displayedComponents: .hourAndMinute)
+                        .labelsHidden()
+                        .frame(width: 84)
+                    Text("〜")
+                    DatePicker("", selection: endTimeBinding($band), displayedComponents: .hourAndMinute)
+                        .labelsHidden()
+                        .frame(width: 84)
+                    Text("は")
+                    TextField("1375", value: $band.wage, format: .number)
+                        .textFieldStyle(.roundedBorder)
+                        .frame(width: 90)
+                    Text("円")
+                    Spacer()
+                    Button {
+                        job.wrappedValue.wageBands.removeAll { $0.id == band.id }
+                    } label: {
+                        Image(systemName: "trash")
+                    }
+                    .buttonStyle(.borderless)
+                }
+            }
+            Button {
+                job.wrappedValue.wageBands.append(
+                    WageBand(wage: Int((Double(job.wrappedValue.wage) * 1.25).rounded()))
+                )
+            } label: {
+                Label("時間帯を追加", systemImage: "plus.circle")
+            }
+        }
+        .padding(4)
+    }
+
+    private func startTimeBinding(_ band: Binding<WageBand>) -> Binding<Date> {
+        Binding(
+            get: { timeDate(band.wrappedValue.startMinutes) },
+            set: { d in
+                let newStart = dateToMinutes(d)
+                band.wrappedValue.startMinutes = newStart
+                var e = band.wrappedValue.endMinutes % 1440
+                if e <= newStart { e += 1440 }
+                band.wrappedValue.endMinutes = e
+            }
+        )
+    }
+
+    private func endTimeBinding(_ band: Binding<WageBand>) -> Binding<Date> {
+        Binding(
+            get: { timeDate(band.wrappedValue.endMinutes) },
+            set: { d in
+                var m = dateToMinutes(d)
+                if m <= band.wrappedValue.startMinutes { m += 1440 }
+                band.wrappedValue.endMinutes = m
+            }
+        )
+    }
+
+    private func timeDate(_ minutes: Int) -> Date {
+        let m = ((minutes % 1440) + 1440) % 1440
+        return Calendar.current.date(bySettingHour: m / 60, minute: m % 60, second: 0, of: Date()) ?? Date()
+    }
+
+    private func dateToMinutes(_ d: Date) -> Int {
+        let c = Calendar.current.dateComponents([.hour, .minute], from: d)
+        return (c.hour ?? 0) * 60 + (c.minute ?? 0)
     }
 
     private func calendarBinding(_ id: String) -> Binding<Bool> {
@@ -355,21 +432,20 @@ struct SettingsView: View {
                     Text("円").foregroundStyle(.secondary)
                 }
                 GridRow {
-                    settingLabel("深夜割増（22:00〜翌5:00）")
+                    settingLabel("時間帯別の時給")
                     Toggle("", isOn: jobSetting(cal.calendarIdentifier).nightPremiumEnabled)
                         .labelsHidden()
-                    Picker("", selection: jobSetting(cal.calendarIdentifier).nightPremiumRate) {
-                        Text("25%").tag(0.25)
-                        Text("30%").tag(0.30)
-                        Text("35%").tag(0.35)
-                        Text("50%").tag(0.50)
-                    }
-                    .pickerStyle(.menu)
-                    .frame(width: 120)
-                    .disabled(!jobSetting(cal.calendarIdentifier).nightPremiumEnabled.wrappedValue)
+                    Text("終了が開始より前なら翌日跨ぎとして計算")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .frame(width: 220, alignment: .leading)
                 }
             }
             .padding(4)
+            if jobSetting(cal.calendarIdentifier).nightPremiumEnabled.wrappedValue {
+                Divider()
+                bandEditor(job: jobSetting(cal.calendarIdentifier))
+            }
         } label: {
             HStack(spacing: 8) {
                 Circle().fill(Color(cal.color)).frame(width: 10, height: 10)
