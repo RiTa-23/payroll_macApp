@@ -313,9 +313,12 @@ struct SettingsView: View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 10) {
                 Text("開始").font(.caption).foregroundStyle(.secondary).frame(width: 84, alignment: .leading)
+                Color.clear.frame(width: 12)
                 Text("終了").font(.caption).foregroundStyle(.secondary).frame(width: 84, alignment: .leading)
-                Text("この時間帯の時給").font(.caption).foregroundStyle(.secondary)
+                Color.clear.frame(width: 12)
+                Text("時給").font(.caption).foregroundStyle(.secondary).frame(width: 90, alignment: .leading)
             }
+            .help("終了が開始時刻以下なら翌日跨ぎとして計算します（例: 22:00〜5:00）")
             ForEach(job.wageBands) { $band in
                 HStack(spacing: 10) {
                     DatePicker("", selection: startTimeBinding($band), displayedComponents: .hourAndMinute)
@@ -330,7 +333,6 @@ struct SettingsView: View {
                         .textFieldStyle(.roundedBorder)
                         .frame(width: 90)
                     Text("円")
-                    Spacer()
                     Button {
                         job.wrappedValue.wageBands.removeAll { $0.id == band.id }
                     } label: {
@@ -409,43 +411,42 @@ struct SettingsView: View {
 
     private func jobSection(_ cal: EKCalendar) -> some View {
         GroupBox {
-            Grid(alignment: .leading, horizontalSpacing: 24, verticalSpacing: 12) {
-                GridRow {
-                    settingLabel("時給")
-                    TextField("1100", value: jobSetting(cal.calendarIdentifier).wage, format: .number)
-                        .textFieldStyle(.roundedBorder)
-                        .frame(width: 120)
-                    Text("円").foregroundStyle(.secondary)
+            VStack(alignment: .leading, spacing: 12) {
+                Grid(alignment: .leading, horizontalSpacing: 24, verticalSpacing: 12) {
+                    GridRow {
+                        settingLabel("時給")
+                        TextField("1100", value: jobSetting(cal.calendarIdentifier).wage, format: .number)
+                            .textFieldStyle(.roundedBorder)
+                            .frame(width: 120)
+                        Text("円").foregroundStyle(.secondary)
+                    }
+                    GridRow {
+                        settingLabel("休憩時間（1シフトあたり）")
+                        TextField("60", value: jobSetting(cal.calendarIdentifier).breakMinutes, format: .number)
+                            .textFieldStyle(.roundedBorder)
+                            .frame(width: 120)
+                        Text("分").foregroundStyle(.secondary)
+                    }
+                    GridRow {
+                        settingLabel("交通費（1出勤日あたり）")
+                        TextField("700", value: jobSetting(cal.calendarIdentifier).transportPerDay, format: .number)
+                            .textFieldStyle(.roundedBorder)
+                            .frame(width: 120)
+                        Text("円").foregroundStyle(.secondary)
+                    }
+                    GridRow {
+                        settingLabel("時間帯別の時給")
+                        Toggle("", isOn: jobSetting(cal.calendarIdentifier).nightPremiumEnabled)
+                            .labelsHidden()
+                    }
                 }
-                GridRow {
-                    settingLabel("休憩時間（1シフトあたり）")
-                    TextField("60", value: jobSetting(cal.calendarIdentifier).breakMinutes, format: .number)
-                        .textFieldStyle(.roundedBorder)
-                        .frame(width: 120)
-                    Text("分").foregroundStyle(.secondary)
-                }
-                GridRow {
-                    settingLabel("交通費（1出勤日あたり）")
-                    TextField("700", value: jobSetting(cal.calendarIdentifier).transportPerDay, format: .number)
-                        .textFieldStyle(.roundedBorder)
-                        .frame(width: 120)
-                    Text("円").foregroundStyle(.secondary)
-                }
-                GridRow {
-                    settingLabel("時間帯別の時給")
-                    Toggle("", isOn: jobSetting(cal.calendarIdentifier).nightPremiumEnabled)
-                        .labelsHidden()
-                    Text("終了が開始より前なら翌日跨ぎとして計算")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .frame(width: 220, alignment: .leading)
+                if jobSetting(cal.calendarIdentifier).nightPremiumEnabled.wrappedValue {
+                    Divider()
+                    bandEditor(job: jobSetting(cal.calendarIdentifier))
                 }
             }
+            .frame(width: 410, alignment: .leading)
             .padding(4)
-            if jobSetting(cal.calendarIdentifier).nightPremiumEnabled.wrappedValue {
-                Divider()
-                bandEditor(job: jobSetting(cal.calendarIdentifier))
-            }
         } label: {
             HStack(spacing: 8) {
                 Circle().fill(Color(cal.color)).frame(width: 10, height: 10)

@@ -8,7 +8,7 @@ struct PayrollApp: App {
         WindowGroup("給与計算") {
             ContentView()
         }
-        .windowResizability(.contentSize)
+        .windowResizability(.contentMinSize)
         .defaultSize(width: compact ? 560 : 1020, height: compact ? 420 : 660)
     }
 }
