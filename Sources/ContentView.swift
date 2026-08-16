@@ -40,7 +40,7 @@ struct PayrollView: View {
 
     private var content: some View {
         VStack(spacing: 0) {
-            HStack(spacing: 12) {
+            HStack(spacing: 8) {
                 Picker("年", selection: Binding(
                     get: { manager.year },
                     set: { manager.setMonth($0, manager.month) }
@@ -50,31 +50,53 @@ struct PayrollView: View {
                 .pickerStyle(.menu)
                 .labelsHidden()
 
-                Picker("月", selection: Binding(
-                    get: { manager.month },
-                    set: { manager.setMonth(manager.year, $0) }
-                )) {
-                    ForEach(1...12, id: \.self) { Text("\($0)月") }
+                HStack(spacing: 2) {
+                    Button {
+                        moveMonth(-1)
+                    } label: {
+                        Image(systemName: "chevron.left")
+                    }
+                    .buttonStyle(.borderless)
+                    .help("前の月")
+
+                    Picker("月", selection: Binding(
+                        get: { manager.month },
+                        set: { manager.setMonth(manager.year, $0) }
+                    )) {
+                        ForEach(1...12, id: \.self) { Text("\($0)月") }
+                    }
+                    .pickerStyle(.menu)
+                    .labelsHidden()
+
+                    Button {
+                        moveMonth(1)
+                    } label: {
+                        Image(systemName: "chevron.right")
+                    }
+                    .buttonStyle(.borderless)
+                    .help("次の月")
                 }
-                .pickerStyle(.menu)
-                .labelsHidden()
+                .fixedSize()
 
                 Spacer()
 
                 Button {
                     manager.refetch()
                 } label: {
-                    Label("再読み込み", systemImage: "arrow.clockwise")
+                    Image(systemName: "arrow.clockwise")
                 }
+                .help("再読み込み")
 
                 Button {
                     manager.exportCSV()
                 } label: {
-                    Label("CSV書き出し", systemImage: "square.and.arrow.down")
+                    Image(systemName: "square.and.arrow.down")
                 }
                 .disabled(manager.rows.isEmpty)
+                .help("CSV書き出し")
             }
-            .padding(12)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
 
             Divider()
 
@@ -98,6 +120,14 @@ struct PayrollView: View {
         }
     }
 
+    private func moveMonth(_ delta: Int) {
+        var y = manager.year
+        var m = manager.month + delta
+        if m < 1 { m = 12; y -= 1 }
+        if m > 12 { m = 1; y += 1 }
+        manager.setMonth(y, m)
+    }
+
     private var emptyState: some View {
         VStack(spacing: 10) {
             Image(systemName: "calendar")
@@ -111,39 +141,54 @@ struct PayrollView: View {
     }
 
     private var shiftList: some View {
-        List(manager.rows) { row in
-            ShiftRowView(row: row)
+        VStack(spacing: 0) {
+            HStack(spacing: 8) {
+                Color.clear.frame(width: 8, height: 1)
+                Text("日付").font(.caption2).foregroundStyle(.secondary).frame(width: 38 + 26 + 8, alignment: .leading)
+                Text("時間").font(.caption2).foregroundStyle(.secondary).frame(width: 108, alignment: .leading)
+                Text("実働").font(.caption2).foregroundStyle(.secondary).frame(width: 88, alignment: .leading)
+                if manager.rows.contains(where: { $0.nightMinutes > 0 }) {
+                    Text("時間帯").font(.caption2).foregroundStyle(.secondary).frame(width: 54, alignment: .leading)
+                }
+                Spacer(minLength: 4)
+                Text("支給額").font(.caption2).foregroundStyle(.secondary)
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 4)
+            Divider()
+            List(manager.rows) { row in
+                ShiftRowView(row: row)
+            }
+            .listStyle(.plain)
         }
-        .listStyle(.inset)
     }
 
     private var summaryBar: some View {
-        HStack(spacing: 28) {
-            stat("出勤日数", "\(manager.summary.workDays)日")
-            stat("総実働時間", manager.summary.workedMinutes.hoursAndMinutesText)
+        HStack(spacing: 20) {
+            stat("出勤", "\(manager.summary.workDays)日")
+            stat("実働", manager.summary.workedMinutes.hoursAndMinutesText)
             stat("基本給", moneyText(manager.summary.basePay))
             if manager.summary.nightPay > 0 {
-                stat("時間帯別給与", moneyText(manager.summary.nightPay))
+                stat("時間帯別", moneyText(manager.summary.nightPay))
             }
             stat("交通費", moneyText(manager.summary.transport))
-            Divider().frame(height: 36)
-            VStack(alignment: .leading, spacing: 2) {
-                Text("合計支給額").font(.caption).foregroundStyle(.secondary)
+            Spacer()
+            HStack(alignment: .firstTextBaseline, spacing: 6) {
+                Text("合計").font(.caption).foregroundStyle(.secondary)
                 Text(moneyText(manager.summary.total))
-                    .font(.system(size: 22, weight: .bold))
+                    .font(.system(size: 20, weight: .bold))
                     .foregroundStyle(.pink)
                     .monospacedDigit()
             }
-            Spacer()
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 12)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
     }
 
     private func stat(_ label: String, _ value: String) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
+        HStack(spacing: 4) {
             Text(label).font(.caption).foregroundStyle(.secondary)
-            Text(value).font(.title3.weight(.semibold)).monospacedDigit()
+            Text(value).font(.callout.weight(.semibold)).monospacedDigit()
         }
     }
 
@@ -165,7 +210,7 @@ struct PayrollView: View {
     }
 }
 
-// MARK: - シフト行
+// MARK: - シフト行（コンパクト表示）
 
 struct ShiftRowView: View {
     let row: ShiftRow
@@ -176,62 +221,68 @@ struct ShiftRowView: View {
     }()
 
     var body: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: 8) {
             Circle()
                 .fill(Color(row.calendarColor))
-                .frame(width: 10, height: 10)
+                .frame(width: 8, height: 8)
 
-            VStack(alignment: .leading, spacing: 1) {
-                Text(row.title)
-                Text(row.calendarTitle)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-            .frame(width: 190, alignment: .leading)
+            Text(Self.df.string(from: row.start, format: "M/d"))
+                .monospacedDigit()
+                .frame(width: 38, alignment: .leading)
 
-            dateText.frame(width: 100, alignment: .leading)
-
-            timeText.frame(width: 115, alignment: .leading)
-
-            Text("休憩 \(row.breakMinutes)分")
+            Text(Self.df.string(from: row.start, format: "EEE"))
                 .foregroundStyle(.secondary)
-                .frame(width: 90, alignment: .leading)
+                .frame(width: 26, alignment: .leading)
+
+            Text(timeText)
+                .monospacedDigit()
+                .frame(width: 108, alignment: .leading)
+
+            Text(row.workedMinutes.hoursAndMinutesText)
+                .monospacedDigit()
+                .frame(width: 88, alignment: .leading)
 
             if row.nightMinutes > 0 {
-                VStack(alignment: .leading, spacing: 1) {
-                    Text(row.workedMinutes.hoursAndMinutesText)
-                    Text("深夜 \(row.nightMinutes / 60)時間\(String(format: "%02d", row.nightMinutes % 60))分")
-                        .font(.caption)
-                        .foregroundStyle(.indigo)
-                }
-                .frame(width: 120, alignment: .leading)
-            } else {
-                Text(row.workedMinutes.hoursAndMinutesText)
-                    .frame(width: 120, alignment: .leading)
+                Text("🌙\(row.nightMinutes / 60):\(String(format: "%02d", row.nightMinutes % 60))")
+                    .font(.caption)
+                    .monospacedDigit()
+                    .foregroundStyle(.indigo)
+                    .frame(width: 54, alignment: .leading)
+                    .help("時間帯別時給の適用時間")
             }
 
-            Spacer()
+            Spacer(minLength: 4)
 
-            VStack(alignment: .trailing, spacing: 1) {
-                Text(moneyText(row.totalPay)).bold().monospacedDigit()
+            VStack(alignment: .trailing, spacing: 0) {
+                Text(moneyText(row.totalPay))
+                    .bold()
+                    .monospacedDigit()
                 if row.nightPay > 0 {
-                    Text("内 時間帯別 \(moneyText(row.nightPay))")
-                        .font(.caption)
+                    Text("時間帯別 \(moneyText(row.nightPay))")
+                        .font(.caption2)
                         .foregroundStyle(.indigo)
+                        .monospacedDigit()
                 }
             }
         }
-        .padding(.vertical, 2)
+        .padding(.vertical, 1)
+        .help(helpText)
     }
 
-    private var dateText: some View {
-        Text(Self.df.string(from: row.start, format: "M/d (EEE)"))
-    }
-
-    private var timeText: some View {
+    private var timeText: String {
         let s = Self.df.string(from: row.start, format: "HH:mm")
         let e = Self.df.string(from: row.end, format: "HH:mm")
-        return Text("\(s)〜\(e)")
+        return "\(s)〜\(e)"
+    }
+
+    private var helpText: String {
+        var lines = ["\(row.calendarTitle)「\(row.title)」",
+                     "休憩 \(row.breakMinutes)分 | 実働 \(row.workedMinutes.hoursAndMinutesText)"]
+        if row.nightMinutes > 0 {
+            lines.append("時間帯別 \(row.nightMinutes / 60)時間\(String(format: "%02d", row.nightMinutes % 60))分 = \(moneyText(row.nightPay))")
+            lines.append("通常分 = \(moneyText(row.basePay))")
+        }
+        return lines.joined(separator: "\n")
     }
 }
 
