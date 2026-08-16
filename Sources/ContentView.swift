@@ -14,7 +14,7 @@ struct ContentView: View {
                 .tabItem { Label("設定", systemImage: "gearshape.fill") }
                 .tag(1)
         }
-        .frame(minWidth: 1020, minHeight: 660)
+        .frame(minWidth: 560, minHeight: 380)
         .task { await manager.bootstrap() }
     }
 }
