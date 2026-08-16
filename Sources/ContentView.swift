@@ -143,7 +143,7 @@ struct PayrollView: View {
     private var shiftList: some View {
         VStack(spacing: 0) {
             HStack(spacing: 8) {
-                Color.clear.frame(width: 8, height: 1)
+                Text("バイト").font(.caption2).foregroundStyle(.secondary)
                 Text("日付").font(.caption2).foregroundStyle(.secondary).frame(width: 38 + 26 + 8, alignment: .leading)
                 Text("時間").font(.caption2).foregroundStyle(.secondary).frame(width: 108, alignment: .leading)
                 Text("実働").font(.caption2).foregroundStyle(.secondary).frame(width: 88, alignment: .leading)
@@ -222,9 +222,15 @@ struct ShiftRowView: View {
 
     var body: some View {
         HStack(spacing: 8) {
-            Circle()
-                .fill(Color(row.calendarColor))
-                .frame(width: 8, height: 8)
+            HStack(spacing: 4) {
+                Circle()
+                    .fill(Color(row.calendarColor))
+                    .frame(width: 6, height: 6)
+                Text(row.calendarTitle)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: true, vertical: false)
+            }
 
             Text(Self.df.string(from: row.start, format: "M/d"))
                 .monospacedDigit()
