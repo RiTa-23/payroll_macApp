@@ -2,6 +2,23 @@
 
 macOS標準のカレンダーアプリと連携し、バイトのシフトから給与を自動計算するネイティブMacアプリです。
 
+## インストール
+
+**ダウンロード（推奨）**: [Releasesページ](https://github.com/RiTa-23/payroll_macApp/releases)から最新版のzipをダウンロード
+
+1. `PayrollCalculator-x.y.z.zip` を展開
+2. `PayrollCalculator.app` を **アプリケーション** フォルダに移動
+3. 初回起動は **右クリック →「開く」→「開く」** を選択
+   > 未公証アプリのため、ダブルクリックでは「開けません」警告が出ます。上記の手順で最初の1回だけ許可してください
+4. カレンダーへのアクセスを求められたら「許可」
+
+**ソースからビルド**:
+
+```bash
+./build.sh          # build/PayrollCalculator.app を生成
+open build/PayrollCalculator.app
+```
+
 ## 機能
 
 - **カレンダー連動**: カレンダーアプリのイベントを自動読み込み（EventKit）
@@ -14,11 +31,6 @@ macOS標準のカレンダーアプリと連携し、バイトのシフトから
 - **設定の永続化**: 設定は自動保存されます
 
 ## 使い方
-
-```bash
-./build.sh          # ビルド（build/PayrollCalculator.app を生成）
-open build/PayrollCalculator.app
-```
 
 1. 初回起動時にカレンダーへのアクセスを求められたら「許可」
 2. 「設定」タブでバイトのカレンダリーにチェックを入れ、時給などを入力
@@ -43,12 +55,24 @@ payroll/
 ├── Sources/
 │   ├── PayrollApp.swift        # アプリのエントリポイント
 │   ├── CalendarManager.swift   # EventKit連携・給与計算ロジック・CSV出力
-│   └── ContentView.swift       # UI（給与計算タブ / 設定タブ）
+│   ├── ContentView.swift       # UI（給与計算 / 統計 / 設定）
+│   └── StatsView.swift         # 統計タブ（グラフ・期間集計）
 ├── Info.plist                  # バンドル設定・カレンダー利用説明
-└── build.sh                    # ビルドスクリプト
+├── build.sh                    # ビルドスクリプト
+└── release.sh                  # リリース作成スクリプト（ビルド→zip→タグ→GitHub Release）
 ```
+
+## リリース手順
+
+```bash
+./release.sh            # Info.plistのバージョンでリリース
+./release.sh 1.1.0      # バージョンを指定してリリース
+```
+
+ビルド → zip作成 → タグ作成 → push → GitHub Release作成まで自動で行います（`gh` CLIと認証が必要）。
 
 ## 要件
 
 - macOS 14 Sonoma 以降
-- Xcode Command Line Tools（swiftc）
+- 配布バイナリは Apple Silicon（arm64）専用です
+- ソースからビルドする場合は Xcode Command Line Tools（swiftc）が必要です
