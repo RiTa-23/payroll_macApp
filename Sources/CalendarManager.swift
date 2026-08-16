@@ -1,5 +1,5 @@
 import Foundation
-import EventKit
+@preconcurrency import EventKit
 import AppKit
 import UniformTypeIdentifiers
 
@@ -133,6 +133,25 @@ struct PayrollSummary: Equatable {
 
     var total: Double { basePay + nightPay + transport }
     static let empty = PayrollSummary()
+
+    static func + (l: PayrollSummary, r: PayrollSummary) -> PayrollSummary {
+        var s = l
+        s.workDays += r.workDays
+        s.workedMinutes += r.workedMinutes
+        s.nightMinutes += r.nightMinutes
+        s.basePay += r.basePay
+        s.nightPay += r.nightPay
+        s.transport += r.transport
+        return s
+    }
+}
+
+/// 統計用の月次データ
+struct MonthlyStat: Identifiable, Equatable {
+    let year: Int
+    let month: Int
+    let summary: PayrollSummary
+    var id: Int { year * 100 + month }
 }
 
 // MARK: - カレンダー管理
@@ -154,6 +173,9 @@ final class CalendarManager: ObservableObject {
 
     private let defaults = UserDefaults.standard
     private static let settingsKey = "payroll.settings"
+    /// EKEventStoreへのクエリは全てこの専用シリアルキューで実行する
+    /// （同一ストアへのマルチスレッド同時クエリはEventKit内部でデッドロックするため）
+    private static let ekQueue = DispatchQueue(label: "com.rita.payroll.ekstore", qos: .userInitiated)
 
     var yearOptions: [Int] {
         let y = Calendar.current.component(.year, from: Date())
@@ -210,12 +232,67 @@ final class CalendarManager: ObservableObject {
             summary = .empty
             return
         }
-        let (rangeStart, rangeEnd) = Self.monthRange(year: year, month: month)
-        let predicate = store.predicateForEvents(withStart: rangeStart, end: rangeEnd, calendars: calendars)
-        let events = store.events(matching: predicate)
-            .filter { !$0.isAllDay && $0.endDate > $0.startDate }
-        rows = Self.computeRows(events: events, settings: settings)
-        summary = Self.computeSummary(rows: rows, settings: settings)
+        let jobSettings = settings
+        let y = year
+        let m = month
+        nonisolated(unsafe) let store = store
+        nonisolated(unsafe) let targets = calendars
+        Self.ekQueue.async { [weak self] in
+            let (rangeStart, rangeEnd) = Self.monthRange(year: y, month: m)
+            let predicate = store.predicateForEvents(withStart: rangeStart, end: rangeEnd, calendars: targets)
+            let events = store.events(matching: predicate)
+                .filter { !$0.isAllDay && $0.endDate > $0.startDate }
+            let rows = Self.computeRows(events: events, settings: jobSettings)
+            let summary = Self.computeSummary(rows: rows, settings: jobSettings)
+            Task { @MainActor [weak self] in
+                // 計算中に月が切り替わっていたら破棄
+                guard let self, self.year == y, self.month == m else { return }
+                self.rows = rows
+                self.summary = summary
+            }
+        }
+    }
+
+    /// 指定年の1〜12月すべての統計を計算（専用シリアルキューで実行）
+    func loadYearlyStats(year: Int) async -> [MonthlyStat] {
+        guard isAuthorized, !settings.selectedCalendarIDs.isEmpty else { return [] }
+        let calendars = allCalendars.filter { settings.selectedCalendarIDs.contains($0.calendarIdentifier) }
+        guard !calendars.isEmpty else { return [] }
+        let jobSettings = settings
+        nonisolated(unsafe) let store = store
+        nonisolated(unsafe) let targets = calendars
+        let today = Calendar.current.startOfDay(for: Date())
+        return await withCheckedContinuation { cont in
+            Self.ekQueue.async {
+                cont.resume(returning: Self.computeYearlyStatsSync(
+                    store: store, calendars: targets, year: year, settings: jobSettings, today: today
+                ))
+            }
+        }
+    }
+
+    nonisolated private static func computeYearlyStatsSync(
+        store: EKEventStore,
+        calendars: [EKCalendar],
+        year: Int,
+        settings: PayrollSettings,
+        today: Date
+    ) -> [MonthlyStat] {
+        var result: [MonthlyStat] = []
+        for month in 1...12 {
+            let (start, end) = monthRange(year: year, month: month)
+            // 未来の月はスキップ（データが確定していないため）
+            if start > today { continue }
+            let predicate = store.predicateForEvents(withStart: start, end: end, calendars: calendars)
+            let events = store.events(matching: predicate)
+                .filter { !$0.isAllDay && $0.endDate > $0.startDate }
+            let rows = computeRows(events: events, settings: settings)
+            result.append(MonthlyStat(
+                year: year, month: month,
+                summary: computeSummary(rows: rows, settings: settings)
+            ))
+        }
+        return result
     }
 
     // MARK: 給与計算

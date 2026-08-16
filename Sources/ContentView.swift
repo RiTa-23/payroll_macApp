@@ -6,16 +6,86 @@ struct ContentView: View {
     @State private var tab: Int = 0
 
     var body: some View {
-        TabView(selection: $tab) {
-            PayrollView(manager: manager, tab: $tab)
-                .tabItem { Label("給与計算", systemImage: "yensign.circle.fill") }
-                .tag(0)
-            SettingsView(manager: manager)
-                .tabItem { Label("設定", systemImage: "gearshape.fill") }
-                .tag(1)
+        // 注: TabViewはStatefulTabContainerの無限再挿入バグ
+        // （タブ切替時にフリーズ）を引き起こすため自作タブバーで代用
+        VStack(spacing: 0) {
+            CustomTabBar(selection: $tab)
+            Divider()
+            switch tab {
+            case 0:
+                PayrollView(manager: manager, tab: $tab)
+            case 1:
+                StatsView(manager: manager)
+            default:
+                SettingsView(manager: manager)
+            }
         }
         .frame(minWidth: 560, minHeight: 380)
         .task { await manager.bootstrap() }
+    }
+}
+
+// MARK: - 自作タブバー（TabView風の外観）
+
+struct CustomTabBar: View {
+    @Binding var selection: Int
+
+    struct Item {
+        let tag: Int
+        let title: String
+        let icon: String
+    }
+
+    private let items: [Item] = [
+        Item(tag: 0, title: "給与計算", icon: "yensign.circle.fill"),
+        Item(tag: 1, title: "統計", icon: "chart.bar.fill"),
+        Item(tag: 2, title: "設定", icon: "gearshape.fill"),
+    ]
+
+    var body: some View {
+        HStack(spacing: 2) {
+            ForEach(items, id: \.tag) { item in
+                TabBarButton(item: item, isSelected: selection == item.tag) {
+                    selection = item.tag
+                }
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 6)
+        .background(.bar)
+    }
+}
+
+private struct TabBarButton: View {
+    let item: CustomTabBar.Item
+    let isSelected: Bool
+    let action: () -> Void
+    @State private var isHovering = false
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 5) {
+                Image(systemName: item.icon)
+                    .font(.system(size: 12, weight: .medium))
+                Text(item.title)
+                    .font(.callout.weight(isSelected ? .semibold : .regular))
+            }
+            .foregroundStyle(isSelected ? Color.accentColor : Color.secondary)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 6)
+            .background(
+                RoundedRectangle(cornerRadius: 7)
+                    .fill(isSelected
+                          ? Color.accentColor.opacity(0.14)
+                          : (isHovering ? Color.primary.opacity(0.06) : Color.clear))
+            )
+            .contentShape(RoundedRectangle(cornerRadius: 7))
+        }
+        .buttonStyle(.plain)
+        .onHover { isHovering = $0 }
+        .animation(.easeOut(duration: 0.12), value: isSelected)
+        .animation(.easeOut(duration: 0.12), value: isHovering)
     }
 }
 
@@ -135,7 +205,7 @@ struct PayrollView: View {
                 .foregroundStyle(.secondary)
             Text("まず「設定」タブでバイトのカレンダーを選択してください")
                 .foregroundStyle(.secondary)
-            Button("設定を開く") { tab = 1 }
+            Button("設定を開く") { tab = 2 }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
