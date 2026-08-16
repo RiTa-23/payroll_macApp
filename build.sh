@@ -15,6 +15,9 @@ rm -rf "${APP_DIR}"
 mkdir -p "${APP_DIR}/Contents/MacOS" "${APP_DIR}/Contents/Resources"
 cp "build/${APP_NAME}" "${APP_DIR}/Contents/MacOS/"
 cp Info.plist "${APP_DIR}/Contents/"
+if [ -f ".assets/AppIcon.icns" ]; then
+    cp ".assets/AppIcon.icns" "${APP_DIR}/Contents/Resources/AppIcon.icns"
+fi
 printf 'APPL????' > "${APP_DIR}/Contents/PkgInfo"
 
 echo "🖋  Ad-hoc code signing..."
