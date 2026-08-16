@@ -122,7 +122,7 @@ struct PayrollView: View {
             stat("出勤日数", "\(manager.summary.workDays)日")
             stat("総実働時間", manager.summary.workedMinutes.hoursAndMinutesText)
             stat("基本給", moneyText(manager.summary.basePay))
-            if manager.settings.nightPremiumEnabled {
+            if manager.summary.nightPremium > 0 {
                 stat("深夜割増", moneyText(manager.summary.nightPremium))
             }
             stat("交通費", moneyText(manager.summary.transport))
@@ -253,8 +253,17 @@ struct SettingsView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 24) {
                 calendarSection
-                wageSection
-                ruleSection
+                if enabledCalendars.isEmpty {
+                    HStack(spacing: 8) {
+                        Image(systemName: "info.circle")
+                        Text("カレンダリーを選択すると、そのバイトごとの給与条件を設定できます")
+                    }
+                    .foregroundStyle(.secondary)
+                    .padding(.vertical, 8)
+                }
+                ForEach(enabledCalendars, id: \.calendarIdentifier) { cal in
+                    jobSection(cal)
+                }
                 Text("※ 実働時間はカレンダーイベントの開始〜終了から休憩時間を差し引いて計算します。")
                     .font(.caption)
                     .foregroundStyle(.secondary)
@@ -263,6 +272,12 @@ struct SettingsView: View {
             .frame(maxWidth: 760, alignment: .leading)
             .frame(maxWidth: .infinity)
         }
+    }
+
+    private var enabledCalendars: [EKCalendar] {
+        manager.allCalendars
+            .filter { manager.settings.selectedCalendarIDs.contains($0.calendarIdentifier) }
+            .sorted { $0.title < $1.title }
     }
 
     private var calendarSection: some View {
@@ -298,6 +313,9 @@ struct SettingsView: View {
             set: { on in
                 if on {
                     manager.settings.selectedCalendarIDs.insert(id)
+                    if manager.settings.jobs[id] == nil {
+                        manager.settings.jobs[id] = JobSetting()
+                    }
                 } else {
                     manager.settings.selectedCalendarIDs.remove(id)
                 }
@@ -305,46 +323,42 @@ struct SettingsView: View {
         )
     }
 
-    private var wageSection: some View {
+    private func jobSetting(_ id: String) -> Binding<JobSetting> {
+        Binding(
+            get: { manager.settings.jobs[id] ?? JobSetting() },
+            set: { manager.settings.jobs[id] = $0 }
+        )
+    }
+
+    private func jobSection(_ cal: EKCalendar) -> some View {
         GroupBox {
             Grid(alignment: .leading, horizontalSpacing: 24, verticalSpacing: 12) {
                 GridRow {
                     settingLabel("時給")
-                    TextField("1100", value: $manager.settings.wage, format: .number)
+                    TextField("1100", value: jobSetting(cal.calendarIdentifier).wage, format: .number)
                         .textFieldStyle(.roundedBorder)
                         .frame(width: 120)
                     Text("円").foregroundStyle(.secondary)
                 }
                 GridRow {
                     settingLabel("休憩時間（1シフトあたり）")
-                    TextField("60", value: $manager.settings.breakMinutes, format: .number)
+                    TextField("60", value: jobSetting(cal.calendarIdentifier).breakMinutes, format: .number)
                         .textFieldStyle(.roundedBorder)
                         .frame(width: 120)
                     Text("分").foregroundStyle(.secondary)
                 }
                 GridRow {
                     settingLabel("交通費（1出勤日あたり）")
-                    TextField("700", value: $manager.settings.transportPerDay, format: .number)
+                    TextField("700", value: jobSetting(cal.calendarIdentifier).transportPerDay, format: .number)
                         .textFieldStyle(.roundedBorder)
                         .frame(width: 120)
                     Text("円").foregroundStyle(.secondary)
                 }
-            }
-            .padding(4)
-        } label: {
-            Label("給与条件", systemImage: "banknote")
-                .font(.headline)
-        }
-    }
-
-    private var ruleSection: some View {
-        GroupBox {
-            Grid(alignment: .leading, horizontalSpacing: 24, verticalSpacing: 12) {
                 GridRow {
                     settingLabel("深夜割増（22:00〜翌5:00）")
-                    Toggle("", isOn: $manager.settings.nightPremiumEnabled)
+                    Toggle("", isOn: jobSetting(cal.calendarIdentifier).nightPremiumEnabled)
                         .labelsHidden()
-                    Picker("", selection: $manager.settings.nightPremiumRate) {
+                    Picker("", selection: jobSetting(cal.calendarIdentifier).nightPremiumRate) {
                         Text("25%").tag(0.25)
                         Text("30%").tag(0.30)
                         Text("35%").tag(0.35)
@@ -352,13 +366,16 @@ struct SettingsView: View {
                     }
                     .pickerStyle(.menu)
                     .frame(width: 120)
-                    .disabled(!manager.settings.nightPremiumEnabled)
+                    .disabled(!jobSetting(cal.calendarIdentifier).nightPremiumEnabled.wrappedValue)
                 }
             }
             .padding(4)
         } label: {
-            Label("計算ルール", systemImage: "slider.horizontal.3")
-                .font(.headline)
+            HStack(spacing: 8) {
+                Circle().fill(Color(cal.color)).frame(width: 10, height: 10)
+                Text(cal.title)
+            }
+            .font(.headline)
         }
     }
 

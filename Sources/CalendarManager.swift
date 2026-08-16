@@ -5,13 +5,50 @@ import UniformTypeIdentifiers
 
 // MARK: - 設定
 
-struct PayrollSettings: Codable, Equatable {
+/// バイト（カレンダリー）ごとの給与条件
+struct JobSetting: Codable, Equatable {
     var wage: Int = 1100
     var breakMinutes: Int = 60
     var transportPerDay: Int = 700
     var nightPremiumEnabled: Bool = true
     var nightPremiumRate: Double = 0.25
+}
+
+struct PayrollSettings: Codable, Equatable {
+    /// キーはカレンダーID
+    var jobs: [String: JobSetting] = [:]
     var selectedCalendarIDs: Set<String> = []
+
+    private enum CodingKeys: String, CodingKey {
+        case jobs, selectedCalendarIDs
+        // 旧バージョン（全カレンダー共通）からの移行用
+        case wage, breakMinutes, transportPerDay
+    }
+
+    init() {}
+
+    func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(jobs, forKey: .jobs)
+        try c.encode(selectedCalendarIDs, forKey: .selectedCalendarIDs)
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        jobs = try c.decodeIfPresent([String: JobSetting].self, forKey: .jobs) ?? [:]
+        selectedCalendarIDs = try c.decodeIfPresent(Set<String>.self, forKey: .selectedCalendarIDs) ?? []
+        // 旧形式（共通の給与条件）を各カレンダリーに展開して移行
+        if jobs.isEmpty, !selectedCalendarIDs.isEmpty {
+            let legacy = JobSetting(
+                wage: try c.decodeIfPresent(Int.self, forKey: .wage) ?? 1100,
+                breakMinutes: try c.decodeIfPresent(Int.self, forKey: .breakMinutes) ?? 60,
+                transportPerDay: try c.decodeIfPresent(Int.self, forKey: .transportPerDay) ?? 700
+            )
+            for id in selectedCalendarIDs {
+                jobs[id] = legacy
+            }
+        }
+    }
 }
 
 // MARK: - 計算結果モデル
@@ -19,6 +56,7 @@ struct PayrollSettings: Codable, Equatable {
 struct ShiftRow: Identifiable {
     let id: String
     let title: String
+    let calendarID: String
     let calendarTitle: String
     let calendarColor: NSColor
     let start: Date
@@ -131,26 +169,28 @@ final class CalendarManager: ObservableObject {
 
     static func computeRows(events: [EKEvent], settings: PayrollSettings) -> [ShiftRow] {
         events.map { event in
+            let job = settings.jobs[event.calendar.calendarIdentifier] ?? JobSetting()
             let start = event.startDate ?? Date()
             let end = max(event.endDate ?? start, start)
-            var worked = Int(end.timeIntervalSince(start) / 60) - settings.breakMinutes
+            var worked = Int(end.timeIntervalSince(start) / 60) - job.breakMinutes
             worked = max(0, worked)
             var night = nightMinutes(between: start, and: end)
             night = min(night, worked)
 
-            let basePay = Double(settings.wage) * Double(worked) / 60.0
-            let premium = settings.nightPremiumEnabled
-                ? Double(settings.wage) * Double(night) / 60.0 * settings.nightPremiumRate
+            let basePay = Double(job.wage) * Double(worked) / 60.0
+            let premium = job.nightPremiumEnabled
+                ? Double(job.wage) * Double(night) / 60.0 * job.nightPremiumRate
                 : 0
 
             return ShiftRow(
                 id: event.eventIdentifier ?? UUID().uuidString,
                 title: event.title ?? "（無題）",
+                calendarID: event.calendar.calendarIdentifier,
                 calendarTitle: event.calendar.title,
                 calendarColor: event.calendar.color,
                 start: start,
                 end: end,
-                breakMinutes: settings.breakMinutes,
+                breakMinutes: job.breakMinutes,
                 workedMinutes: worked,
                 nightMinutes: night,
                 basePay: basePay,
@@ -162,12 +202,20 @@ final class CalendarManager: ObservableObject {
 
     static func computeSummary(rows: [ShiftRow], settings: PayrollSettings) -> PayrollSummary {
         var s = PayrollSummary()
-        s.workDays = Set(rows.map { Calendar.current.startOfDay(for: $0.start) }).count
+        var days = Set<Date>()
+        var transportDays = Set<String>() // "calendarID|day" の重複排除用
+        for row in rows {
+            let day = Calendar.current.startOfDay(for: row.start)
+            days.insert(day)
+            if transportDays.insert("\(row.calendarID)|\(day.timeIntervalSince1970)").inserted {
+                s.transport += Double((settings.jobs[row.calendarID] ?? JobSetting()).transportPerDay)
+            }
+        }
+        s.workDays = days.count
         s.workedMinutes = rows.reduce(0) { $0 + $1.workedMinutes }
         s.nightMinutes = rows.reduce(0) { $0 + $1.nightMinutes }
         s.basePay = rows.reduce(0) { $0 + $1.basePay }
         s.nightPremium = rows.reduce(0) { $0 + $1.nightPremium }
-        s.transport = Double(s.workDays * settings.transportPerDay)
         return s
     }
 
