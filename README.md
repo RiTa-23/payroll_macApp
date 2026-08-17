@@ -2,6 +2,8 @@
 
 macOS標準のカレンダーアプリと連携し、バイトのシフトから給与を自動計算するネイティブMacアプリです。
 
+> 紹介ページ: https://payroll.ritane.co
+
 ## インストール
 
 **ダウンロード（推奨）**: [Releasesページ](https://github.com/RiTa-23/payroll_macApp/releases)から最新版のDMGをダウンロード
