@@ -136,8 +136,31 @@
   footer a:hover { text-decoration: underline; }
 
   @media (max-width: 640px) {
-    .hero h1 { font-size: 32px; }
-    .grid { grid-template-columns: 1fr; }
+    .wrap { padding: 0 20px; }
+    .nav { height: 48px; }
+    .nav .name { font-size: 14px; }
+    .nav .links { gap: 14px; white-space: nowrap; }
+    .nav .links a:not(.dl) { display: none; }
+    .nav .links a.dl {
+      background: var(--pink); color: #fff;
+      padding: 6px 14px; border-radius: 980px;
+    }
+    .hero { padding: 48px 0 40px; }
+    .hero .icon { width: 104px; height: 104px; border-radius: 22px; }
+    .hero h1 { font-size: 30px; }
+    .hero .tag { font-size: 16px; }
+    .btn { padding: 11px 22px; font-size: 15px; }
+    section { padding: 44px 0; }
+    h2 { font-size: 23px; }
+    .lead { font-size: 15px; }
+    .grid { grid-template-columns: 1fr; gap: 12px; }
+    .card { padding: 18px; }
+  }
+
+  @media (max-width: 480px) {
+    .req dt { float: none; width: auto; }
+    .req dd { margin-left: 0; margin-top: 2px; }
+    .req dt + dd { margin-bottom: 10px; }
   }
 </style>
 </head>
